@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
-from agents.pipeline import run_query
+from agents.pipeline import run_query, stream_query
 from indexing.hybrid_index import get_index
 from ingestion.run import ingest
 
@@ -104,6 +104,37 @@ async def chat(req: ChatRequest):
     ])
     result["session_id"] = session_id
     return result
+
+
+@api.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    if not req.message.strip():
+        raise HTTPException(400, "message is required")
+    import json as _json
+    from sse_starlette.sse import EventSourceResponse
+
+    sources = req.sources or ["all"]
+    session_id = req.session_id or str(uuid.uuid4())
+
+    async def gen():
+        done = None
+        yield {"data": _json.dumps({"type": "start", "session_id": session_id})}
+        async for chunk in stream_query(req.message, sources):
+            if chunk.get("type") == "done":
+                done = chunk
+            yield {"data": _json.dumps(chunk)}
+        if done:
+            ts = datetime.now(timezone.utc).isoformat()
+            await db["chat_history"].insert_many([
+                {"session_id": session_id, "role": "user", "content": req.message, "ts": ts},
+                {"session_id": session_id, "role": "assistant", "content": done["answer"],
+                 "citations": done["citations"], "stages": done["stages"],
+                 "events": done["events"], "elapsed_ms": done["elapsed_ms"],
+                 "insufficient": done["insufficient"], "rewritten_query": done["rewritten_query"],
+                 "ts": ts},
+            ])
+
+    return EventSourceResponse(gen())
 
 
 @api.get("/history/{session_id}")

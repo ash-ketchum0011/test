@@ -36,4 +36,7 @@ React (CRA) + Tailwind · FastAPI · MongoDB (registry + chat history) · Qdrant
 ## Backlog / Roadmap
 - **P1 — Phase 1 (Docker)**: Dockerfile per service + docker-compose (Qdrant official image), parity with Phase 0.
 - **P1 — Phase 2 (Kubernetes)**: Namespace/Deployment/Service/ConfigMap/Secret, Qdrant StatefulSet+PVC, ingestion CronJob, HPA/KEDA scale-to-zero, kind/minikube then GKE.
-- **P2**: streaming (SSE) answer tokens; live Confluence/ServiceNow/SharePoint connectors (wire the marked `.env` branches); dedicated `/api/health` readiness probe; auth if multi-tenant.
+- **P2**: live Confluence/ServiceNow/SharePoint connectors (wire the marked `.env` branches); dedicated `/api/health` readiness probe; auth if multi-tenant.
+
+## Changelog
+- 2026-06: Added **token-by-token streaming** — `POST /api/chat/stream` (SSE) emits step/tool/token/done events; UI shows live pipeline chips then streams the answer with a cursor. Non-streaming `/api/chat` retained for tests/fallback.

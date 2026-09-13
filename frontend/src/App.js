@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   Boxes, Send, PanelRightOpen, PanelRightClose, Database, Cpu,
-  ExternalLink, AlertTriangle, Wrench, RefreshCw, Loader2, BadgeCheck, Terminal,
+  ExternalLink, AlertTriangle, Wrench, RefreshCw, Loader2, BadgeCheck, Terminal, Zap,
 } from "lucide-react";
-import { getStatus, runIngest, sendChat } from "./api";
+import { getStatus, runIngest, streamChat } from "./api";
 import { SourceBadge, SOURCE_STYLE } from "./components/badges";
 import TracePanel from "./components/TracePanel";
 
@@ -68,33 +68,56 @@ function SuggestedResolution({ body }) {
   );
 }
 
-function AssistantMessage({ msg, onTrace }) {
+function LiveSteps({ steps }) {
+  if (!steps?.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" data-testid="live-pipeline-steps">
+      {steps.map((s, i) => (
+        <span key={i} className="fade-up inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-300">
+          <Zap size={9} /> {s.label}
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+        <Loader2 size={11} className="animate-spin" /> working…
+      </span>
+    </div>
+  );
+}
+
+function AssistantMessage({ msg, onTrace, liveSteps }) {
   const parts = (msg.answer || "").split(RES_RE);
   const answerNoRes = (parts[0] || "").trim();
   const resolutionBody = parts.length > 1 ? parts.slice(1).join("\n").trim() : "";
+  const showThinking = msg.streaming && !msg.answer;
   return (
     <div className="fade-up flex gap-3" data-testid="assistant-message">
       <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/10">
         <Cpu size={16} className="text-indigo-400" />
       </span>
       <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-subtle bg-card p-4">
+        {showThinking && <LiveSteps steps={liveSteps} />}
         {msg.insufficient && (
           <div className="mb-2 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-xs text-red-300">
             <AlertTriangle size={13} /> Low grounding — answer flagged, verify before acting.
           </div>
         )}
-        <div className="md text-[14px] text-slate-200">
-          <ReactMarkdown>{answerNoRes || "_No answer produced._"}</ReactMarkdown>
-        </div>
-        <SuggestedResolution body={resolutionBody} />
-        <Citations items={msg.citations} />
-        <button
-          onClick={() => onTrace(msg.trace)}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-subtle bg-obsidian/60 px-2.5 py-1 text-[11px] text-slate-400 hover:border-sky-500/40 hover:text-sky-300"
-          data-testid="view-trace-button"
-        >
-          <Terminal size={12} /> View agent trace · {msg.trace?.elapsed_ms}ms
-        </button>
+        {!showThinking && (
+          <div className="md text-[14px] text-slate-200">
+            <ReactMarkdown>{answerNoRes || "_No answer produced._"}</ReactMarkdown>
+            {msg.streaming && <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-sky-400 align-middle" />}
+          </div>
+        )}
+        {!msg.streaming && <SuggestedResolution body={resolutionBody} />}
+        {!msg.streaming && <Citations items={msg.citations} />}
+        {msg.trace && !msg.streaming && (
+          <button
+            onClick={() => onTrace(msg.trace)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-subtle bg-obsidian/60 px-2.5 py-1 text-[11px] text-slate-400 hover:border-sky-500/40 hover:text-sky-300"
+            data-testid="view-trace-button"
+          >
+            <Terminal size={12} /> View agent trace · {msg.trace?.elapsed_ms}ms
+          </button>
+        )}
       </div>
     </div>
   );
@@ -110,30 +133,53 @@ export default function App() {
   const [showTrace, setShowTrace] = useState(true);
   const [activeTrace, setActiveTrace] = useState(null);
   const [ingesting, setIngesting] = useState(false);
+  const [liveSteps, setLiveSteps] = useState([]);
   const endRef = useRef(null);
 
   const refresh = () => getStatus().then(setStatus).catch(() => {});
   useEffect(() => { refresh(); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
+  const patchLast = (patch) =>
+    setMessages((m) => {
+      const c = [...m];
+      const last = c[c.length - 1];
+      c[c.length - 1] = typeof patch === "function" ? patch(last) : { ...last, ...patch };
+      return c;
+    });
+
   const submit = async (q) => {
     const message = (q ?? input).trim();
     if (!message || loading) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: message }]);
+    setLiveSteps([]);
+    setMessages((m) => [
+      ...m,
+      { role: "user", content: message },
+      { role: "assistant", answer: "", citations: [], streaming: true },
+    ]);
     setLoading(true);
     try {
       const sources = filter === "all" ? ["all"] : [filter];
-      const res = await sendChat(message, sources);
-      setActiveTrace(res);
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", answer: res.answer, citations: res.citations, insufficient: res.insufficient, trace: res },
-      ]);
+      await streamChat(message, sources, undefined, (ev) => {
+        if (ev.type === "step") {
+          setLiveSteps((s) => (s.some((x) => x.agent === ev.agent) ? s : [...s, { agent: ev.agent, label: ev.label }]));
+        } else if (ev.type === "token") {
+          patchLast((last) => ({ ...last, answer: (last.answer || "") + ev.text }));
+        } else if (ev.type === "done") {
+          setActiveTrace(ev);
+          setShowTrace(true);
+          patchLast((last) => ({
+            ...last, answer: ev.answer, citations: ev.citations,
+            insufficient: ev.insufficient, trace: ev, streaming: false,
+          }));
+        }
+      });
     } catch (e) {
-      setMessages((m) => [...m, { role: "assistant", answer: "Request failed. Check the backend is running.", citations: [] }]);
+      patchLast({ answer: "Request failed. Check the backend is running.", streaming: false });
     } finally {
       setLoading(false);
+      setLiveSteps([]);
     }
   };
 
@@ -244,17 +290,13 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <AssistantMessage key={i} msg={m} onTrace={(t) => { setActiveTrace(t); setShowTrace(true); }} />
+                    <AssistantMessage
+                      key={i}
+                      msg={m}
+                      liveSteps={m.streaming ? liveSteps : null}
+                      onTrace={(t) => { setActiveTrace(t); setShowTrace(true); }}
+                    />
                   )
-                )}
-
-                {loading && (
-                  <div className="fade-up flex items-center gap-3 text-slate-500">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/10">
-                      <Loader2 size={16} className="animate-spin text-indigo-400" />
-                    </span>
-                    <span className="text-sm">Agents working — orchestrating, retrieving, re-ranking…</span>
-                  </div>
                 )}
                 <div ref={endRef} />
               </div>

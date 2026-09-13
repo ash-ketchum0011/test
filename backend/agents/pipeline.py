@@ -97,38 +97,24 @@ STAGE_LABEL = {
 }
 
 
-async def run_query(message: str, allowed_sources: List[str]) -> Dict[str, Any]:
-    runner = get_runner()
-    uid, sid = "user", str(uuid.uuid4())
-    await runner.session_service.create_session(app_name=APP_NAME, user_id=uid, session_id=sid)
+def _collect_event(ev, rel_ms: int, events: List[Dict[str, Any]]):
+    for part in (ev.content.parts if ev.content else []):
+        if getattr(part, "function_call", None):
+            events.append({"agent": ev.author, "label": STAGE_LABEL.get(ev.author, ev.author),
+                           "type": "tool_call", "tool": part.function_call.name,
+                           "args": dict(part.function_call.args or {}), "t_ms": rel_ms})
+        elif getattr(part, "function_response", None):
+            resp = part.function_response.response
+            summary = resp.get("count") if isinstance(resp, dict) else None
+            events.append({"agent": ev.author, "label": STAGE_LABEL.get(ev.author, ev.author),
+                           "type": "tool_response", "tool": part.function_response.name,
+                           "count": summary, "t_ms": rel_ms})
+        elif getattr(part, "text", None) and part.text.strip():
+            events.append({"agent": ev.author, "label": STAGE_LABEL.get(ev.author, ev.author),
+                           "type": "message", "text": part.text.strip(), "t_ms": rel_ms})
 
-    start = time.time()
-    events: List[Dict[str, Any]] = []
-    async for ev in runner.run_async(
-        user_id=uid, session_id=sid,
-        new_message=types.Content(role="user", parts=[types.Part(text=message)]),
-        state_delta={"allowed_sources": allowed_sources, "user_query": message},
-    ):
-        rel_ms = int((time.time() - start) * 1000)
-        for part in (ev.content.parts if ev.content else []):
-            if getattr(part, "function_call", None):
-                events.append({"agent": ev.author, "label": STAGE_LABEL.get(ev.author, ev.author),
-                               "type": "tool_call", "tool": part.function_call.name,
-                               "args": dict(part.function_call.args or {}), "t_ms": rel_ms})
-            elif getattr(part, "function_response", None):
-                resp = part.function_response.response
-                summary = resp.get("count") if isinstance(resp, dict) else None
-                events.append({"agent": ev.author, "label": STAGE_LABEL.get(ev.author, ev.author),
-                               "type": "tool_response", "tool": part.function_response.name,
-                               "count": summary, "t_ms": rel_ms})
-            elif getattr(part, "text", None) and part.text.strip():
-                events.append({"agent": ev.author, "label": STAGE_LABEL.get(ev.author, ev.author),
-                               "type": "message", "text": part.text.strip(), "t_ms": rel_ms})
 
-    elapsed = int((time.time() - start) * 1000)
-    session = await runner.session_service.get_session(app_name=APP_NAME, user_id=uid, session_id=sid)
-    state = session.state
-
+def _build_result(events: List[Dict[str, Any]], state: dict, elapsed: int) -> Dict[str, Any]:
     answer = ""
     for ev in reversed(events):
         if ev["agent"] == "response_agent" and ev["type"] == "message":
@@ -169,3 +155,64 @@ async def run_query(message: str, allowed_sources: List[str]) -> Dict[str, Any]:
             "events": events, "elapsed_ms": elapsed,
             "insufficient": bool(state.get("insufficient")),
             "rewritten_query": state.get("search_query")}
+
+
+async def run_query(message: str, allowed_sources: List[str]) -> Dict[str, Any]:
+    runner = get_runner()
+    uid, sid = "user", str(uuid.uuid4())
+    await runner.session_service.create_session(app_name=APP_NAME, user_id=uid, session_id=sid)
+    start = time.time()
+    events: List[Dict[str, Any]] = []
+    async for ev in runner.run_async(
+        user_id=uid, session_id=sid,
+        new_message=types.Content(role="user", parts=[types.Part(text=message)]),
+        state_delta={"allowed_sources": allowed_sources, "user_query": message},
+    ):
+        _collect_event(ev, int((time.time() - start) * 1000), events)
+    elapsed = int((time.time() - start) * 1000)
+    session = await runner.session_service.get_session(app_name=APP_NAME, user_id=uid, session_id=sid)
+    return _build_result(events, session.state, elapsed)
+
+
+async def stream_query(message: str, allowed_sources: List[str]):
+    """Async generator of pipeline events; streams response tokens as they arrive."""
+    from google.adk.agents.run_config import RunConfig, StreamingMode
+
+    runner = get_runner()
+    uid, sid = "user", str(uuid.uuid4())
+    await runner.session_service.create_session(app_name=APP_NAME, user_id=uid, session_id=sid)
+    start = time.time()
+    events: List[Dict[str, Any]] = []
+    seen = set()
+
+    async for ev in runner.run_async(
+        user_id=uid, session_id=sid,
+        new_message=types.Content(role="user", parts=[types.Part(text=message)]),
+        state_delta={"allowed_sources": allowed_sources, "user_query": message},
+        run_config=RunConfig(streaming_mode=StreamingMode.SSE),
+    ):
+        rel_ms = int((time.time() - start) * 1000)
+        author = ev.author
+        if author not in seen:
+            seen.add(author)
+            yield {"type": "step", "agent": author,
+                   "label": STAGE_LABEL.get(author, author), "t_ms": rel_ms}
+
+        if getattr(ev, "partial", False):
+            if author == "response_agent" and ev.content and ev.content.parts:
+                delta = ev.content.parts[0].text
+                if delta:
+                    yield {"type": "token", "text": delta}
+            continue
+
+        for part in (ev.content.parts if ev.content else []):
+            if getattr(part, "function_call", None):
+                yield {"type": "tool", "agent": author, "label": STAGE_LABEL.get(author, author),
+                       "tool": part.function_call.name,
+                       "args": dict(part.function_call.args or {}), "t_ms": rel_ms}
+        _collect_event(ev, rel_ms, events)
+
+    elapsed = int((time.time() - start) * 1000)
+    session = await runner.session_service.get_session(app_name=APP_NAME, user_id=uid, session_id=sid)
+    result = _build_result(events, session.state, elapsed)
+    yield {"type": "done", **result}
