@@ -13,7 +13,10 @@ from google.genai import types
 
 from indexing.hybrid_index import get_index
 
-RERANK_THRESHOLD = float(os.environ.get("RERANK_THRESHOLD", "-4"))
+RERANK_THRESHOLD = float(os.environ.get("RERANK_THRESHOLD", "-6"))
+# If the best re-ranked chunk scores below this, the question is deemed
+# out-of-scope for the knowledge base and the assistant refuses to answer.
+SUFFICIENCY_THRESHOLD = float(os.environ.get("RERANK_SUFFICIENCY", "-6"))
 
 
 def _format_context(chunks: List[Dict[str, Any]]) -> str:
@@ -43,10 +46,13 @@ class RerankValidateAgent(BaseAgent):
                 seen.add(dedup)
                 merged.append(h)
 
-        ranked = get_index().rerank(query, merged, top_k=6) if merged else []
-        survivors = [d for d in ranked if d.get("rerank_score", 0) >= RERANK_THRESHOLD]
-        if not survivors and ranked:
-            survivors = ranked[:3]
+        ranked = get_index().rerank(query, merged, top_k=8) if merged else []
+        top_score = ranked[0].get("rerank_score") if ranked else None
+        if top_score is None or top_score < SUFFICIENCY_THRESHOLD:
+            # Nothing in the knowledge base is relevant -> refuse (grounded-only).
+            survivors = []
+        else:
+            survivors = [d for d in ranked if d.get("rerank_score", 0) >= RERANK_THRESHOLD][:6]
         insufficient = len(survivors) == 0
 
         delta = {

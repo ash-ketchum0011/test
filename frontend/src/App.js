@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   Boxes, Send, PanelRightOpen, PanelRightClose, Database, Cpu,
-  ExternalLink, AlertTriangle, Wrench, RefreshCw, Loader2, BadgeCheck, Terminal, Zap,
+  ExternalLink, AlertTriangle, Wrench, RefreshCw, Loader2, BadgeCheck, Terminal, Zap, Square,
 } from "lucide-react";
 import { getStatus, runIngest, streamChat } from "./api";
 import { SourceBadge, SOURCE_STYLE } from "./components/badges";
@@ -135,6 +135,7 @@ export default function App() {
   const [ingesting, setIngesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState([]);
   const endRef = useRef(null);
+  const abortRef = useRef(null);
 
   const refresh = () => getStatus().then(setStatus).catch(() => {});
   useEffect(() => { refresh(); }, []);
@@ -159,6 +160,8 @@ export default function App() {
       { role: "assistant", answer: "", citations: [], streaming: true },
     ]);
     setLoading(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const sources = filter === "all" ? ["all"] : [filter];
       await streamChat(message, sources, undefined, (ev) => {
@@ -174,14 +177,24 @@ export default function App() {
             insufficient: ev.insufficient, trace: ev, streaming: false,
           }));
         }
-      });
+      }, controller.signal);
     } catch (e) {
-      patchLast({ answer: "Request failed. Check the backend is running.", streaming: false });
+      if (e.name === "AbortError") {
+        patchLast((last) => ({
+          ...last, streaming: false, stopped: true,
+          answer: (last.answer || "") || "_Generation stopped._",
+        }));
+      } else {
+        patchLast({ answer: "Request failed. Check the backend is running.", streaming: false });
+      }
     } finally {
+      abortRef.current = null;
       setLoading(false);
       setLiveSteps([]);
     }
   };
+
+  const stopGenerating = () => abortRef.current?.abort();
 
   const doIngest = async () => {
     setIngesting(true);
@@ -313,15 +326,26 @@ export default function App() {
                     className="scroll-thin max-h-32 flex-1 resize-none rounded-xl border border-subtle bg-card px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-sky-500/50"
                     data-testid="chat-input-textarea"
                   />
-                  <button
-                    onClick={() => submit()}
-                    disabled={loading || !input.trim()}
-                    className="flex h-[46px] items-center gap-2 rounded-xl bg-sky-500 px-4 text-sm font-semibold text-obsidian transition-colors hover:bg-sky-400 disabled:opacity-40"
-                    data-testid="chat-submit-button"
-                  >
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                    <span className="hidden sm:inline">Send</span>
-                  </button>
+                  {loading ? (
+                    <button
+                      onClick={stopGenerating}
+                      className="flex h-[46px] items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 text-sm font-semibold text-red-300 transition-colors hover:bg-red-500/20"
+                      data-testid="chat-stop-button"
+                    >
+                      <Square size={14} className="fill-current" />
+                      <span className="hidden sm:inline">Stop</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => submit()}
+                      disabled={!input.trim()}
+                      className="flex h-[46px] items-center gap-2 rounded-xl bg-sky-500 px-4 text-sm font-semibold text-obsidian transition-colors hover:bg-sky-400 disabled:opacity-40"
+                      data-testid="chat-submit-button"
+                    >
+                      <Send size={16} />
+                      <span className="hidden sm:inline">Send</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </>

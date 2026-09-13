@@ -1,0 +1,31 @@
+{
+  "summary": "Verified guardrail (knowledge-base-only) + Stop button + streaming regressions. Backend: 8/8 pytest cases pass in /app/backend/tests/test_guardrail.py — /api/status OK; 3 out-of-scope queries (today's date / joke / write python code) all return insufficient=true, citations=[], and answer EXACTLY equal to the required REFUSAL string; 2 in-scope queries (locked account, DB restore) return insufficient=false with proper servicenow / worddoc citations; SSE /api/chat/stream produces token events + a done event, with refusal correctly propagating through streaming. Frontend Playwright: three-dots regression fixed (header shows indexed=19, emergent gpt-5.4, 5 sample chips render, no Network Error banners); UI guardrail — 'what is today's date?' renders assistant-message with 'Low grounding' flag, exact refusal text, 0 citation-link and 0 suggested-resolution-card; streaming in-scope question streams tokens progressively then finalises with citation-link + view-trace-button; Stop button — while streaming a chat-stop-button appears in place of chat-submit-button, clicking it aborts the stream, chat-submit-button re-appears immediately (Send), and Agent Trace panel shows the pipeline stages (Orchestrator, Retrieval, Re-ranking merged=11 kept=1 grounded, Response).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Chat / abort UX", "issues": ["When Stop is clicked BEFORE the LLM streams any token (i.e. still in retrieval/re-rank phase), the partial assistant bubble is replaced with the placeholder text 'Generation stopped.' rather than keeping the pipeline-step badges. If Stop is clicked AFTER tokens started streaming, the partial text IS retained. Minor UX nit — acceptable, but the request phrasing 'partial answer so far is retained' is only literally true post-first-token."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_guardrail.py",
+    "/app/test_reports/pytest/guardrail_results.xml",
+    "/app/backend/tests/test_api_endpoints.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Guardrail is implemented at two layers: (1) rerank.py drops all survivors when top cross-encoder score < SUFFICIENCY_THRESHOLD (-6), (2) pipeline.py RESPONSE_INSTRUCTION forbids outside knowledge and enforces exact REFUSAL string when insufficient=True. Clean two-layer defence.",
+    "REFUSAL string is defined once in pipeline.py and re-checked verbatim by tests — good single source of truth. Frontend also renders it via markdown correctly with no extra decorations.",
+    "streamChat correctly threads AbortSignal to fetch, and App.js swaps chat-submit-button <-> chat-stop-button while loading. On abort, generation stops immediately without leaking network activity.",
+    "Consider showing the accumulated response text when Stop is clicked pre-first-token, instead of overwriting with 'Generation stopped.' — currently the earlier partial (pipeline step badges) is discarded."
+  ],
+  "updated_files": ["/app/backend/tests/test_guardrail.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (regression + guardrail UI + stop + streaming all verified)"},
+  "test_credentials": "N/A (no auth)",
+  "seed_data_creation": "None. Startup auto-ingest still yields 19 chunks.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Guardrail rerank threshold: RERANK_SUFFICIENCY=-6 (env-overridable). Out-of-scope top score ~ -11, in-scope >= -1.5 — threshold separates cleanly. Refusal text is a single constant REFUSAL in /app/backend/agents/pipeline.py; keep tests exact-string aligned with it. SSE endpoint POST /api/chat/stream emits {type: 'step'|'tool'|'token'|'done'} — done payload matches non-streaming /api/chat schema (answer, citations, stages, events, insufficient, elapsed_ms). Chat latency 5-20s so use timeouts>=60s. Frontend chat-stop-button only mounts while loading=true; test by waiting on chat-stop-button then clicking.",
+  "rca of the issue": "Original 'three-dots' bug RCA (previously fixed by main agent): frontend/.env REACT_APP_BACKEND_URL pointed to a wrong external origin, so /api/status calls failed with Network Error; badges rendered '…' placeholder. Fix: set REACT_APP_BACKEND_URL to the app's own preview origin (https://flex-ai-gateway.preview.emergentagent.com) so API calls are same-origin. Verified: header populates with indexed=19, emergent, gpt-5.4."
+}

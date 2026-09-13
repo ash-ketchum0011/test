@@ -7,11 +7,12 @@ export const getStatus = () => api.get("/status").then((r) => r.data);
 export const runIngest = (source = "all") => api.post("/ingest", { source }).then((r) => r.data);
 
 // Streaming chat over SSE (fetch + ReadableStream, since EventSource can't POST).
-export async function streamChat(message, sources, session_id, onEvent) {
+export async function streamChat(message, sources, session_id, onEvent, signal) {
   const res = await fetch(`${BASE}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, sources, session_id }),
+    signal,
   });
   if (!res.ok || !res.body) throw new Error(`stream failed: ${res.status}`);
   const reader = res.body.getReader();

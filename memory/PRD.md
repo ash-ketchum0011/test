@@ -40,3 +40,6 @@ React (CRA) + Tailwind · FastAPI · MongoDB (registry + chat history) · Qdrant
 
 ## Changelog
 - 2026-06: Added **token-by-token streaming** — `POST /api/chat/stream` (SSE) emits step/tool/token/done events; UI shows live pipeline chips then streams the answer with a cursor. Non-streaming `/api/chat` retained for tests/fallback.
+- 2026-06: **Knowledge-base-only guardrail** — rerank stage refuses when the top cross-encoder score < `RERANK_SUFFICIENCY` (−6): out-of-scope questions (e.g. "today's date") return `insufficient=true`, no citations, and a fixed refusal message; in-scope questions still answer grounded. Response Agent instruction forbids outside/general knowledge.
+- 2026-06: **Stop button** — `streamChat` threads an `AbortSignal`; the input bar swaps Send ⇄ Stop while generating, and aborting keeps any partial text.
+- 2026-06: **Fixed "three dots" / Network Error** — `REACT_APP_BACKEND_URL` now points to the app's own origin (`flex-ai-gateway.preview.emergentagent.com`) so API calls are same-origin (was cross-origin → CORS/Network Error, badges stuck on "…").
