@@ -1,0 +1,162 @@
+{
+  "project_title": "Multi-Agent RAG System with Real-Time Agent Trace & Observability",
+  "archetype": "THE PERFORMANCE PRO & TACTICAL MINIMALISM (Command-Center High-Density Developer Aesthetic)",
+  "theme": "Dark Mode First (Obsidian & Deep Slate with Vibrant High-Contrast Agent Traces)",
+  "file_type_notice": "Use .js or .jsx file extensions for React components in frontend/src",
+  "typography": {
+    "font_family_heading": "'Outfit', 'Cabinet Grotesk', -apple-system, sans-serif",
+    "font_family_body": "'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif",
+    "font_family_mono": "'JetBrains Mono', 'Fira Code', monospace",
+    "sizes": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight",
+      "h2": "text-xl sm:text-2xl font-bold tracking-tight",
+      "h3": "text-lg sm:text-xl font-semibold",
+      "h4": "text-base font-semibold",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "small_code": "text-xs font-mono tracking-wide"
+    },
+    "forbidden_fonts": ["Space Grotesk", "Comic Sans", "Impact"]
+  },
+  "colors": {
+    "forbidden_colors": ["#1B93A4", "#7351B7"],
+    "background_primary": "#0A0D14",
+    "background_secondary": "#111622",
+    "background_card": "#161C2B",
+    "background_card_hover": "#1D2538",
+    "border_subtle": "#232D42",
+    "border_active": "#3B82F6",
+    "text_main": "#F1F5F9",
+    "text_muted": "#94A3B8",
+    "text_dim": "#64748B",
+    "accent_primary": "#38BDF8",
+    "agent_colors": {
+      "orchestrator": {
+        "hex": "#F59E0B",
+        "bg_badge": "bg-amber-500/10",
+        "border": "border-amber-500/30",
+        "text": "text-amber-400"
+      },
+      "document_agent": {
+        "hex": "#3B82F6",
+        "bg_badge": "bg-blue-500/10",
+        "border": "border-blue-500/30",
+        "text": "text-blue-400"
+      },
+      "incident_agent": {
+        "hex": "#06B6D4",
+        "bg_badge": "bg-cyan-500/10",
+        "border": "border-cyan-500/30",
+        "text": "text-cyan-400"
+      },
+      "search_agent": {
+        "hex": "#8B5CF6",
+        "bg_badge": "bg-purple-500/10",
+        "border": "border-purple-500/30",
+        "text": "text-purple-400"
+      },
+      "rerank_validation": {
+        "hex": "#10B981",
+        "bg_badge": "bg-emerald-500/10",
+        "border": "border-emerald-500/30",
+        "text": "text-emerald-400"
+      },
+      "response_agent": {
+        "hex": "#6366F1",
+        "bg_badge": "bg-indigo-500/10",
+        "border": "border-indigo-500/30",
+        "text": "text-indigo-400"
+      }
+    },
+    "source_badges": {
+      "confluence": {
+        "bg": "bg-blue-900/40",
+        "text": "text-blue-300",
+        "border": "border-blue-700/50",
+        "label": "Confluence Doc"
+      },
+      "word": {
+        "bg": "bg-cyan-900/40",
+        "text": "text-cyan-300",
+        "border": "border-cyan-700/50",
+        "label": "Word Document"
+      },
+      "servicenow": {
+        "bg": "bg-amber-900/40",
+        "text": "text-amber-300",
+        "border": "border-amber-700/50",
+        "label": "ServiceNow Ticket"
+      }
+    }
+  },
+  "layout_and_components": {
+    "header": {
+      "style": "Glassmorphism with border-b border-slate-800/80 backdrop-blur-md bg-slate-950/80 text-white z-50 sticky top-0",
+      "elements": [
+        "Brand Logo & Title with Active System Status Glow Indicator",
+        "Quick Stat Badges (Indexed Docs, Qdrant Hybrid Status, Active Agents)",
+        "Navigation / View Switcher Tabs (Chat Studio, Ingestion Dashboard, System Topology)",
+        "Source Filter Quick Toggles (All, Confluence, Word, ServiceNow)",
+        "Agent Trace Side Panel Toggle Button with Live Pulse Indicator"
+      ]
+    },
+    "main_chat_area": {
+      "style": "Flex-1 flex flex-col h-[calc(100vh-4rem)] max-w-7xl mx-auto w-full p-4 lg:p-6 gap-4 overflow-hidden",
+      "features": [
+        "Streamed message thread with human vs RAG assistant distinction",
+        "Inline citation chips with click-to-highlight source preview drawer",
+        "Suggested Resolution Card for ServiceNow Incident query outcomes with 1-click apply action",
+        "Source Filter Toggle Toolbar (All, Confluence, Word, ServiceNow Tickets)",
+        "Interactive Input Bar with hybrid keyword/vector mode indicator, sample query chips, and submit action button"
+      ]
+    },
+    "trace_side_panel": {
+      "style": "W-full lg:w-[450px] bg-slate-900/95 border-l border-slate-800 flex flex-col h-full shadow-2xl backdrop-blur-xl transition-all duration-300",
+      "sections": [
+        "Header with Execution Time (ms), Total Tokens, and Qdrant Search Latency",
+        "Pipeline Flow Steps (Orchestrator -> Parallel Agents -> Re-ranking -> Grounded Response)",
+        "Collapsible Step Details showing tool input parameters, retrieved chunk vector scores, and raw LLM prompt/response",
+        "Interactive Chunk Inspector displaying similarity score, hybrid weight (Dense vs Sparse), and text payload"
+      ]
+    },
+    "ingestion_status_view": {
+      "style": "Grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-slate-900/50 border border-slate-800 rounded-xl",
+      "metrics": [
+        "Confluence Pages Indexed Count & Last Sync Timestamp",
+        "Word Documentation Files Parsed & Vectorized",
+        "ServiceNow Knowledge Base & Support Tickets Processed",
+        "Qdrant Hybrid Vector Store Collection Health & Indexing Throughput"
+      ]
+    }
+  },
+  "testing_and_attributes": {
+    "data_testid_rules": "All interactive elements MUST have explicit data-testid attributes in kebab-case.",
+    "key_test_ids": [
+      "data-testid='chat-input-textarea'",
+      "data-testid='chat-submit-button'",
+      "data-testid='agent-trace-toggle-button'",
+      "data-testid='agent-trace-panel'",
+      "data-testid='source-filter-confluence'",
+      "data-testid='source-filter-word'",
+      "data-testid='source-filter-servicenow'",
+      "data-testid='suggested-resolution-card'",
+      "data-testid='citation-link'",
+      "data-testid='ingestion-status-dashboard'"
+    ]
+  },
+  "image_urls": {
+    "server_infrastructure": "https://images.pexels.com/photos/1148820/pexels-photo-1148820.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+  },
+  "instructions_to_main_agent": [
+    "Build a production-grade multi-agent RAG system UI with Google ADK orchestrator patterns and Qdrant hybrid vector search visualization.",
+    "Always use .js or .jsx file extensions for frontend React components.",
+    "Ensure every chat response includes grounded citations with badge indicators for Confluence, Word docs, and ServiceNow tickets.",
+    "Include a dedicated 'Suggested Resolution' visual card when ServiceNow incident data is returned in the answer.",
+    "Provide a collapsible side panel for 'Agent Trace / Events' showing pipeline step timeline, tool calls, retrieved chunk scores, and timing.",
+    "Include source filter toggle controls (All, Confluence, Word, ServiceNow) that update chat search scopes.",
+    "Provide an ingestion status dashboard tab displaying total indexed documents per source and index health metrics.",
+    "Add testid attributes to all interactive elements for end-to-end automated testing."
+  ]
+},
+  "overwrite": true,
+  "path": "/app/design_guidelines.json"
+}

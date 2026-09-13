@@ -1,0 +1,58 @@
+[
+  {
+    "source_id": "INC0012345",
+    "short_description": "GlobalProtect VPN shows Portal unreachable on home WiFi",
+    "description": "User cannot connect to VPN from home. Error: Portal unreachable. Works fine from office.",
+    "state": "Closed",
+    "resolution": "Root cause was captive-portal WiFi blocking port 443. Advised user to open a browser, accept the WiFi captive portal terms, then reconnect GlobalProtect. Also restarted the PanGPS service. VPN connected successfully.",
+    "close_notes": "Captive portal WiFi. Accept portal terms + restart PanGPS service.",
+    "category": "Network",
+    "priority": "3 - Moderate",
+    "resolution_code": "Solved (Permanently)",
+    "opened_at": "2026-05-10T08:12:00Z",
+    "closed_at": "2026-05-10T11:40:00Z",
+    "url": "https://acme.service-now.com/incident.do?sys_id=INC0012345"
+  },
+  {
+    "source_id": "INC0012346",
+    "short_description": "Account locked after multiple failed logins",
+    "description": "User locked out of SSO after entering wrong password several times. Needs urgent access.",
+    "state": "Resolved",
+    "resolution": "Account was locked by the 5-attempt policy. Force-unlocked the account in Okta, issued a temporary 24-hour password, and asked the user to reset via https://sso.acme.com/reset. Confirmed login restored.",
+    "close_notes": "Okta force-unlock + temp password + self-service reset.",
+    "category": "Access Management",
+    "priority": "2 - High",
+    "resolution_code": "Solved (Permanently)",
+    "opened_at": "2026-04-22T13:05:00Z",
+    "closed_at": "2026-04-22T13:35:00Z",
+    "url": "https://acme.service-now.com/incident.do?sys_id=INC0012346"
+  },
+  {
+    "source_id": "INC0012347",
+    "short_description": "Pod stuck in CrashLoopBackOff after deploy",
+    "description": "New deployment of billing-service pods keep restarting with CrashLoopBackOff.",
+    "state": "Closed",
+    "resolution": "The deployment referenced a ConfigMap key that did not exist, so the container exited on startup. Corrected the ConfigMap, re-applied the manifest, and pods became Ready. Recommended adding a readiness probe with a longer initialDelaySeconds.",
+    "close_notes": "Missing ConfigMap key. Fixed ConfigMap + re-applied.",
+    "category": "Platform",
+    "priority": "1 - Critical",
+    "resolution_code": "Solved (Permanently)",
+    "opened_at": "2026-05-21T09:00:00Z",
+    "closed_at": "2026-05-21T10:20:00Z",
+    "url": "https://acme.service-now.com/incident.do?sys_id=INC0012347"
+  },
+  {
+    "source_id": "INC0012999",
+    "short_description": "Email client slow to sync (OPEN - active investigation)",
+    "description": "Outlook slow to sync for several users in the London office.",
+    "state": "In Progress",
+    "resolution": "",
+    "close_notes": "",
+    "category": "Messaging",
+    "priority": "3 - Moderate",
+    "resolution_code": "",
+    "opened_at": "2026-06-01T07:45:00Z",
+    "closed_at": "",
+    "url": "https://acme.service-now.com/incident.do?sys_id=INC0012999"
+  }
+]

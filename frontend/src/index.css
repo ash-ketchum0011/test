@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #0a0d14;
+  color: #f1f5f9;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(56, 189, 248, 0.3);
+}
+
+/* subtle grid backdrop */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(35, 45, 66, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(35, 45, 66, 0.35) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #232d42; border-radius: 8px; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.35s ease both; }
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-dot { animation: pulseDot 1.4s ease-in-out infinite; }
+
+/* markdown answer styling */
+.md p { margin: 0 0 0.7rem; line-height: 1.65; }
+.md ul, .md ol { margin: 0 0 0.7rem 1.1rem; }
+.md li { margin-bottom: 0.25rem; line-height: 1.6; }
+.md strong { color: #f8fafc; }
+.md code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82em;
+  background: #0f1420;
+  border: 1px solid #232d42;
+  padding: 0.1rem 0.35rem;
+  border-radius: 5px;
+}
+.md h1, .md h2, .md h3 { font-family: "Outfit", sans-serif; margin: 0.4rem 0; }

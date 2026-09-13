@@ -1,0 +1,32 @@
+[
+  {
+    "source_id": "CONF-101",
+    "space": "ENG",
+    "title": "VPN Setup Guide for Remote Employees",
+    "labels": ["vpn", "onboarding", "network"],
+    "author": "j.doe",
+    "url": "https://confluence.acme.com/display/ENG/VPN+Setup+Guide",
+    "updated_at": "2026-05-02T10:00:00Z",
+    "body": "# VPN Setup Guide\n\n## Overview\nAll remote employees must connect through the corporate VPN (GlobalProtect) before accessing internal systems.\n\n## Installation\n1. Download GlobalProtect from the self-service portal.\n2. Install and enter the portal address vpn.acme.com.\n3. Log in with your SSO credentials.\n\n## Troubleshooting\nIf you see error 'Portal unreachable', confirm you are not on a captive-portal WiFi and that port 443 is open. Restart the GlobalProtect service. If MFA fails, re-enroll your device in the SSO portal."
+  },
+  {
+    "source_id": "CONF-102",
+    "space": "IT",
+    "title": "Password Reset and Account Lockout Policy",
+    "labels": ["security", "sso", "password"],
+    "author": "a.smith",
+    "url": "https://confluence.acme.com/display/IT/Password+Reset+Policy",
+    "updated_at": "2026-04-18T09:30:00Z",
+    "body": "# Password Reset Policy\n\n## Lockout\nAccounts lock after 5 failed login attempts for 30 minutes.\n\n## Self-service reset\nUse https://sso.acme.com/reset to reset your password. Passwords must be 12+ characters with one symbol and cannot match the last 5 passwords.\n\n## Escalation\nIf self-service reset fails, IT can force-unlock the account in Okta and trigger a temporary password valid for 24 hours."
+  },
+  {
+    "source_id": "CONF-103",
+    "space": "ENG",
+    "title": "Kubernetes Deployment Runbook",
+    "labels": ["k8s", "deployment", "runbook"],
+    "author": "m.lee",
+    "url": "https://confluence.acme.com/display/ENG/K8s+Deployment+Runbook",
+    "updated_at": "2026-05-20T14:15:00Z",
+    "body": "# Kubernetes Deployment Runbook\n\n## Rolling deploys\nUse `kubectl rollout status deployment/<name>`. Deployments use readiness probes on /healthz.\n\n## Common failures\nCrashLoopBackOff usually means a failing readiness probe or missing ConfigMap/Secret. Check `kubectl describe pod` events. ImagePullBackOff means the registry secret is missing or the tag does not exist.\n\n## Rollback\nRun `kubectl rollout undo deployment/<name>` to revert to the previous ReplicaSet."
+  }
+]
