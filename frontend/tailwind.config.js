@@ -3,11 +3,15 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        obsidian: "#0A0D14",
-        slatebg: "#111622",
-        card: "#161C2B",
-        cardhover: "#1D2538",
-        subtle: "#232D42",
+        obsidian: "rgb(var(--bg) / <alpha-value>)",
+        slatebg: "rgb(var(--panel) / <alpha-value>)",
+        card: "rgb(var(--surface) / <alpha-value>)",
+        cardhover: "rgb(var(--surface2) / <alpha-value>)",
+        subtle: "rgb(var(--line) / <alpha-value>)",
+        ink: "rgb(var(--ink) / <alpha-value>)",
+        ink2: "rgb(var(--ink2) / <alpha-value>)",
+        ink3: "rgb(var(--ink3) / <alpha-value>)",
+        brand: "rgb(var(--brand) / <alpha-value>)",
       },
       fontFamily: {
         head: ["Outfit", "sans-serif"],

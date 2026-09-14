@@ -1,9 +1,14 @@
 import React, { useState } from "react";
 import {
   Workflow, ChevronDown, ChevronRight, Wrench, MessageSquare,
-  Layers, ShieldCheck, Sparkles, Clock, X,
+  Layers, ShieldCheck, Sparkles, Clock, X, Loader2, Check, Circle,
 } from "lucide-react";
 import { SourceBadge, AGENT_STYLE } from "./badges";
+
+const AGENT_STAGE = {
+  orchestrator: "orchestrator", document_agent: "retrieval", incident_agent: "retrieval",
+  search_agent: "retrieval", rerank_validate: "rerank_validation", response_agent: "response",
+};
 
 const PIPELINE = [
   { key: "orchestrator", label: "Orchestrator", icon: Sparkles, desc: "Classify & rewrite query" },
@@ -25,7 +30,7 @@ function ChunkRow({ c }) {
   return (
     <div className="rounded-lg border border-subtle bg-obsidian/60 p-2.5" data-testid="trace-chunk">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="truncate text-xs font-medium text-slate-200">{c.title}</span>
+        <span className="truncate text-xs font-medium text-ink">{c.title}</span>
         <SourceBadge type={c.source_type} />
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
@@ -34,7 +39,7 @@ function ChunkRow({ c }) {
         <Score label="sparse" value={c.sparse_score} color="text-purple-400" />
         <Score label="rerank" value={c.rerank_score} color="text-emerald-400" />
       </div>
-      {c.snippet && <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-500">{c.snippet}</p>}
+      {c.snippet && <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-ink3">{c.snippet}</p>}
     </div>
   );
 }
@@ -56,10 +61,10 @@ function Stage({ stage, defaultOpen }) {
           <Icon size={15} className="text-sky-400" />
         </span>
         <span className="flex-1">
-          <span className="block text-sm font-semibold text-slate-100">{stage.label}</span>
-          <span className="block text-[11px] text-slate-500">{meta.desc}</span>
+          <span className="block text-sm font-semibold text-ink">{stage.label}</span>
+          <span className="block text-[11px] text-ink3">{meta.desc}</span>
         </span>
-        {open ? <ChevronDown size={16} className="text-slate-500" /> : <ChevronRight size={16} className="text-slate-500" />}
+        {open ? <ChevronDown size={16} className="text-ink3" /> : <ChevronRight size={16} className="text-ink3" />}
       </button>
 
       {open && (
@@ -92,9 +97,9 @@ function Stage({ stage, defaultOpen }) {
 
           {stage.stage === "rerank_validation" && (
             <>
-              <div className="flex items-center gap-3 text-[11px] text-slate-400">
-                <span>merged: <b className="text-slate-200">{d.merged_count ?? 0}</b></span>
-                <span>kept: <b className="text-slate-200">{(d.survivors || []).length}</b></span>
+              <div className="flex items-center gap-3 text-[11px] text-ink2">
+                <span>merged: <b className="text-ink">{d.merged_count ?? 0}</b></span>
+                <span>kept: <b className="text-ink">{(d.survivors || []).length}</b></span>
                 <span className={d.insufficient ? "text-red-400" : "text-emerald-400"}>
                   {d.insufficient ? "insufficient evidence" : "grounded ✓"}
                 </span>
@@ -102,7 +107,7 @@ function Stage({ stage, defaultOpen }) {
               <div className="space-y-1.5">
                 {(d.survivors || []).map((c, i) => (
                   <div key={i} className="flex items-center justify-between rounded-lg border border-subtle bg-obsidian/60 px-2.5 py-1.5">
-                    <span className="mr-2 flex items-center gap-2 truncate text-xs text-slate-200">
+                    <span className="mr-2 flex items-center gap-2 truncate text-xs text-ink">
                       <span className="font-mono text-emerald-400">#{i + 1}</span> {c.title}
                     </span>
                     <span className="flex items-center gap-2">
@@ -116,7 +121,7 @@ function Stage({ stage, defaultOpen }) {
           )}
 
           {stage.stage === "response" && (
-            <div className="flex items-center gap-4 text-[11px] text-slate-400">
+            <div className="flex items-center gap-4 text-[11px] text-ink2">
               <span className={d.grounded ? "text-emerald-400" : "text-red-400"}>
                 {d.grounded ? "Grounded answer" : "Ungrounded / flagged"}
               </span>
@@ -129,13 +134,85 @@ function Stage({ stage, defaultOpen }) {
   );
 }
 
+function StatusIndicator({ st }) {
+  if (st === "done") return <Check size={16} className="text-emerald-400" />;
+  if (st === "running") return <Loader2 size={15} className="animate-spin text-sky-400" />;
+  if (st === "streaming")
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-medium text-brand">
+        <span className="live-dot h-2 w-2 rounded-full bg-sky-400" /> streaming
+      </span>
+    );
+  return <Circle size={13} className="text-ink3" />;
+}
+
+function LivePipeline({ trace }) {
+  const status = trace.stageStatus || {};
+  return (
+    <div className="space-y-2.5" data-testid="live-pipeline">
+      {PIPELINE.map((p) => {
+        const st = status[p.key] || "pending";
+        const Icon = p.icon;
+        const tools = (trace.events || []).filter((e) => e.type === "tool_call" && AGENT_STAGE[e.agent] === p.key);
+        return (
+          <div
+            key={p.key}
+            className={`rounded-xl border bg-card p-3 transition-all duration-300 ${st === "pending" ? "border-subtle opacity-45" : "border-brand/40"}`}
+            data-testid={`live-stage-${p.key}`}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-subtle bg-obsidian">
+                <Icon size={15} className="text-sky-400" />
+              </span>
+              <span className="flex-1">
+                <span className="block text-sm font-semibold text-ink">{p.label}</span>
+                <span className="block text-[11px] text-ink3">{p.desc}</span>
+              </span>
+              <StatusIndicator st={st} />
+            </div>
+            {tools.length > 0 && (
+              <div className="mt-2 space-y-1 border-t border-subtle pt-2">
+                {tools.map((e, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[11px] text-ink2">
+                    <Wrench size={10} /> {e.tool}
+                    {e.args?.query ? `("${String(e.args.query).slice(0, 32)}…")` : e.args?.number ? `(${e.args.number})` : ""}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function TracePanel({ trace, onClose }) {
   const [tab, setTab] = useState("pipeline");
   if (!trace) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-slate-600">
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-ink3">
         <Workflow size={40} className="opacity-40" />
         <p className="text-sm">Ask a question to see the live agent trace — every step, tool call and retrieved chunk.</p>
+      </div>
+    );
+  }
+  if (trace.streaming) {
+    return (
+      <div className="flex h-full flex-col" data-testid="agent-trace-panel">
+        <div className="flex items-center gap-2 border-b border-subtle px-4 py-3">
+          <span className="live-dot h-2 w-2 rounded-full bg-sky-400" />
+          <h3 className="font-head text-sm font-bold tracking-tight text-ink">Agent Trace</h3>
+          <span className="font-mono text-[11px] text-brand">running…</span>
+          {onClose && (
+            <button onClick={onClose} className="ml-auto rounded-md p-1 text-ink3 hover:bg-cardhover hover:text-ink" data-testid="trace-close-button">
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        <div className="scroll-thin flex-1 overflow-y-auto p-3">
+          <LivePipeline trace={trace} />
+        </div>
       </div>
     );
   }
@@ -144,13 +221,13 @@ export default function TracePanel({ trace, onClose }) {
       <div className="flex items-center justify-between border-b border-subtle px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="live-dot h-2 w-2 rounded-full bg-emerald-400" />
-          <h3 className="font-head text-sm font-bold tracking-tight text-slate-100">Agent Trace</h3>
-          <span className="flex items-center gap-1 font-mono text-[11px] text-slate-500">
+          <h3 className="font-head text-sm font-bold tracking-tight text-ink">Agent Trace</h3>
+          <span className="flex items-center gap-1 font-mono text-[11px] text-ink3">
             <Clock size={11} /> {trace.elapsed_ms} ms
           </span>
         </div>
         {onClose && (
-          <button onClick={onClose} className="rounded-md p-1 text-slate-500 hover:bg-cardhover hover:text-slate-200" data-testid="trace-close-button">
+          <button onClick={onClose} className="rounded-md p-1 text-ink3 hover:bg-cardhover hover:text-ink" data-testid="trace-close-button">
             <X size={16} />
           </button>
         )}
@@ -162,7 +239,7 @@ export default function TracePanel({ trace, onClose }) {
             key={t}
             onClick={() => setTab(t)}
             className={`rounded-md px-3 py-1 text-xs font-medium capitalize ${
-              tab === t ? "bg-sky-500/15 text-sky-300" : "text-slate-500 hover:text-slate-300"
+              tab === t ? "bg-sky-500/15 text-brand" : "text-ink3 hover:text-ink2"
             }`}
             data-testid={`trace-tab-${t}`}
           >
@@ -180,13 +257,13 @@ export default function TracePanel({ trace, onClose }) {
         {tab === "events" &&
           (trace.events || []).map((e, i) => (
             <div key={i} className="flex items-start gap-2 rounded-lg border border-subtle bg-card px-3 py-2" data-testid="trace-event">
-              <span className="font-mono text-[10px] text-slate-600 pt-0.5">{String(e.t_ms).padStart(5, " ")}ms</span>
-              <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${AGENT_STYLE[e.agent] || "border-subtle text-slate-400"}`}>
+              <span className="font-mono text-[10px] text-ink3 pt-0.5">{String(e.t_ms).padStart(5, " ")}ms</span>
+              <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${AGENT_STYLE[e.agent] || "border-subtle text-ink2"}`}>
                 {e.label}
               </span>
-              <span className="min-w-0 flex-1 text-[11px] text-slate-400">
+              <span className="min-w-0 flex-1 text-[11px] text-ink2">
                 {e.type === "tool_call" && (
-                  <span className="flex items-center gap-1 text-slate-300"><Wrench size={11} /> {e.tool}({e.args?.query ? `"${String(e.args.query).slice(0, 40)}…"` : e.args?.number || ""})</span>
+                  <span className="flex items-center gap-1 text-ink2"><Wrench size={11} /> {e.tool}({e.args?.query ? `"${String(e.args.query).slice(0, 40)}…"` : e.args?.number || ""})</span>
                 )}
                 {e.type === "tool_response" && <span className="text-emerald-400/80">→ {e.count} results</span>}
                 {e.type === "message" && <span className="line-clamp-3">{e.text}</span>}

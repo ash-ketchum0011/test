@@ -16,7 +16,7 @@ export const AGENT_STYLE = {
 };
 
 export function SourceBadge({ type }) {
-  const s = SOURCE_STYLE[type] || { label: type, cls: "bg-slate-700/40 text-slate-300 border-slate-600" };
+  const s = SOURCE_STYLE[type] || { label: type, cls: "bg-slate-700/40 text-ink2 border-slate-600" };
   return (
     <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${s.cls}`}>
       {s.label}

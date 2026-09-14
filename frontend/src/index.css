@@ -2,8 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ---- Dark theme (default) ---- */
+:root, html[data-theme="dark"] {
+  --bg: 10 13 20;
+  --panel: 17 22 34;
+  --surface: 22 28 43;
+  --surface2: 29 37 56;
+  --line: 35 45 66;
+  --ink: 241 245 249;
+  --ink2: 148 163 184;
+  --ink3: 100 116 139;
+  --brand: 125 211 252;
+  --grid: 35 45 66;
   color-scheme: dark;
+}
+
+/* ---- Light theme ---- */
+html[data-theme="light"] {
+  --bg: 245 247 251;
+  --panel: 255 255 255;
+  --surface: 255 255 255;
+  --surface2: 238 242 248;
+  --line: 222 229 239;
+  --ink: 15 23 42;
+  --ink2: 71 85 105;
+  --ink3: 118 130 148;
+  --brand: 2 132 199;
+  --grid: 203 213 225;
+  color-scheme: light;
 }
 
 html, body, #root {
@@ -12,10 +38,11 @@ html, body, #root {
 
 body {
   margin: 0;
-  background: #0a0d14;
-  color: #f1f5f9;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
   font-family: "Plus Jakarta Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 ::selection {
@@ -25,13 +52,13 @@ body {
 /* subtle grid backdrop */
 .bg-grid {
   background-image:
-    linear-gradient(rgba(35, 45, 66, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(35, 45, 66, 0.35) 1px, transparent 1px);
+    linear-gradient(rgb(var(--grid) / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--grid) / 0.35) 1px, transparent 1px);
   background-size: 44px 44px;
 }
 
 .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-.scroll-thin::-webkit-scrollbar-thumb { background: #232d42; border-radius: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 8px; }
 .scroll-thin::-webkit-scrollbar-track { background: transparent; }
 
 @keyframes fadeUp {
@@ -50,12 +77,12 @@ body {
 .md p { margin: 0 0 0.7rem; line-height: 1.65; }
 .md ul, .md ol { margin: 0 0 0.7rem 1.1rem; }
 .md li { margin-bottom: 0.25rem; line-height: 1.6; }
-.md strong { color: #f8fafc; }
+.md strong { color: rgb(var(--ink)); }
 .md code {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.82em;
-  background: #0f1420;
-  border: 1px solid #232d42;
+  background: rgb(var(--surface2));
+  border: 1px solid rgb(var(--line));
   padding: 0.1rem 0.35rem;
   border-radius: 5px;
 }

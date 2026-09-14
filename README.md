@@ -1,101 +1,103 @@
-# Enterprise Knowledge & Incident-Resolution — Multi-Agent RAG (Phase 0)
+# 🧠 Enterprise Multi-Agent RAG — "RAG Command Center"
 
-A production-shaped, **multi-agent Retrieval-Augmented Generation** system that ingests internal
-documentation (Confluence, Word docs) and support tickets (ServiceNow), and answers questions with
-**grounded citations** and **suggested resolutions**. Built with **Google ADK** for the agents and a
-single **Qdrant** collection for **hybrid (vector + BM25)** search. Ships with a web **Chat UI** that
-exposes the full **agent trace / events** of every request.
+Ask questions in plain English and get **answers grounded in your own company knowledge** — Confluence pages, Word documents, and past ServiceNow tickets — each with **citations** and a **suggested resolution**. Every answer shows a live **agent trace** so you can see exactly how it was produced.
 
-> This repo is **Phase 0** (local venv, free/open-source models, mock data). Phases 1 (Docker) and
-> 2 (Kubernetes) are on the backlog — see *Roadmap*.
+Built with **Google ADK** (multi-agent orchestration) + **Qdrant** hybrid search, using **free/open-source** embedding & re-ranking models. The chat answer streams token-by-token, supports **dark/light mode**, and can be **stopped mid-answer**.
 
-## Architecture
+---
 
+## 🖼️ How it works (High-Level Design)
+
+![Architecture](docs/architecture.svg)
+
+**In one line:** documents are chunked and stored once in a hybrid index (offline); each question fans out to specialist agents that search that index, the best evidence is re-ranked and validated, and a final agent writes a grounded, cited answer (online).
+
+**① Ingestion (offline):** `Connectors → normalize → chunk (~400 tok) → embed (MiniLM dense + BM25 sparse) → Qdrant`. Re-running is safe — unchanged docs are skipped via a content-hash registry.
+
+**② Retrieval (online):** `Question → Orchestrator (rewrites query) → Parallel [Document · Incident · Search] agents → hybrid search (dense+BM25, RRF) → Re-rank/Validate (cross-encoder) → Response (grounded answer + citations)`.
+
+**🔒 Knowledge-base-only:** if nothing relevant is found, the assistant refuses instead of guessing — it never answers from general knowledge (e.g. "what's today's date?" is declined).
+
+---
+
+## 🚀 Start using it (in the running preview)
+
+It's already live. Just open the app and:
+1. Type a question, or tap a **sample query** chip.
+2. Watch the **Agent Trace** panel light up on the right as each agent runs.
+3. Read the streamed answer, open the **citations**, and toggle **dark/light** (top-right sun/moon).
+
+Try: *"How do I fix GlobalProtect 'Portal unreachable' on home WiFi?"* or *"A pod is stuck in CrashLoopBackOff — has this happened before?"*
+
+### Run locally
+```bash
+# Backend
+cd backend && python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env                     # fill in keys (see below)
+python -m ingestion.run --source all     # index the (mock) data
+uvicorn server:app --port 8001
+
+# Frontend
+cd ../frontend && yarn install && yarn start
 ```
-Confluence ─┐
-Word Docs ──┼─▶ Ingestion Pipeline ─▶ Parse/Normalize/Chunk/Metadata ─▶ Qdrant Hybrid Index
-ServiceNow ─┘                                                                │
-                                                                             ▼
-                                                                    Orchestrator (LlmAgent)
-                                                                             │  rewrites query
-                                         ┌───────────────────────────────────┼───────────────────┐
-                                         ▼                                   ▼                    ▼
-                                 Document Agent                      Incident Agent          Search Agent   (ParallelAgent)
-                                 (Confluence+Word)                   (ServiceNow + live)      (all sources)
-                                         └───────────────────────────────────┼───────────────────┘
-                                                          Re-ranking / Validation (cross-encoder, non-LLM BaseAgent)
-                                                                             ▼
-                                                          Response Agent (LlmAgent) → grounded answer + citations
-```
 
-Every diagram box maps to an ADK construct, wired as:
-`SequentialAgent(Orchestrator, ParallelAgent(Document, Incident, Search), RerankValidate, Response)`.
+---
 
-## Cost model (~$0 for a pilot)
-| Component | Choice | Cost |
+## 🔌 Connecting your real data
+
+By default the app uses bundled **mock data** so it runs at $0. To use real systems, set these in `backend/.env` and re-run ingestion:
+
+| Source | What decides *which* data is pulled | Env vars |
 |---|---|---|
-| Agent framework | Google ADK | free |
-| Embeddings (dense) | `sentence-transformers/all-MiniLM-L6-v2` via fastembed, CPU | $0/call |
-| Keyword (sparse) | Qdrant BM25 (fastembed), same collection | $0/call |
-| Re-ranker | `bge-reranker-base` cross-encoder, CPU | $0/call |
-| Vector + keyword store | self-hosted Qdrant (Apache 2.0) | free |
-| LLM | pluggable (see below) | dev via Emergent key / Gemini free tier |
+| **Confluence** | Your base URL + the **space keys** you list | `CONFLUENCE_BASE_URL`, `CONFLUENCE_SPACES` (e.g. `ENG,IT`), `CONFLUENCE_TOKEN` |
+| **ServiceNow** | Your instance's incident table, auto-filtered to **closed/resolved** tickets that have a resolution | `SERVICENOW_INSTANCE_URL`, `SERVICENOW_TOKEN` |
+| **Word docs** | A **folder** you point to — drop `.docx` files in it | `WORDDOCS_PATH` (else `backend/data/mock/worddocs/`) |
 
-The **only** unavoidable paid element is the LLM at real production volume — call it out, don't silently upgrade.
+> ⚠️ The live Confluence/ServiceNow fetch is currently **stubbed** (`NotImplementedError`) — the connector interface, filtering, and `.env` wiring are in place; implement the marked live branch in `backend/ingestion/connectors.py` to go live. Word `.docx` parsing is fully working today.
 
-## Swapping the AI API (LLM)
-All agents get their model from `agents/model_provider.py`. Change provider via env only:
+Then: `python -m ingestion.run --source all` (or hit **Re-run Ingestion** on the Ingestion tab).
 
+---
+
+## 🤖 Choosing the AI model (pluggable)
+
+One env switch — no code changes (`backend/agents/model_provider.py`):
 ```
 LLM_PROVIDER=emergent   # emergent | gemini | openai
 LLM_MODEL=gpt-5.4
 ```
-- `emergent` → routes through the Emergent OpenAI-compatible proxy (`EMERGENT_LLM_KEY`), for dev/testing.
-- `gemini`   → your own `GEMINI_API_KEY` (spec's recommended free tier).
-- `openai`   → your own `OPENAI_API_KEY`.
-No other code changes are needed to switch.
+- `emergent` → Emergent Universal key (dev/testing, no signup).
+- `gemini` → your `GEMINI_API_KEY`.  •  `openai` → your `OPENAI_API_KEY`.
 
-## Wiring real data sources
-Mock data under `data/mock/` is used automatically. To use real systems, set the credentials in `.env`
-(`CONFLUENCE_*`, `SERVICENOW_*`, `WORDDOCS_PATH`) and implement the marked live branch in
-`ingestion/connectors.py`. Only **closed/resolved** ServiceNow incidents with a resolution are indexed;
-open tickets are looked up **live** via the Incident Agent's `lookup_open_incident` tool.
+---
 
-## Run Phase 0
+## ✨ Features
+- Multi-agent pipeline on **Google ADK** (Orchestrator → parallel specialists → re-rank/validate → response).
+- **Hybrid retrieval**: dense (MiniLM) + sparse (BM25) fused with RRF, then a `bge-reranker` cross-encoder — all local & free.
+- **Grounded answers** with `[n]` citations + a **Suggested Resolution** card for incidents.
+- **Knowledge-base-only guardrail** — refuses off-topic / ungrounded questions.
+- **Streaming** answers + a **real-time agent trace** (each stage lights up as it runs) with per-tool calls and chunk scores.
+- **Dark / light mode**, **source scoping** (Confluence / Word / ServiceNow), **Stop** button, and an **Ingestion dashboard**.
+
+## 🧪 Tests
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env            # fill in keys
-
-# 1) ingest (idempotent + incremental by content hash)
-python -m ingestion.run --source all      # or: confluence | worddocs | servicenow
-
-# 2) serve API (FastAPI) — auto-ingests mock data on first boot
-uvicorn server:app --port 8001
-
-# 3) frontend
-cd ../frontend && yarn install && yarn start
+cd backend && pytest -q     # connectors, chunking, guardrail, and full grounded-pipeline
 ```
-Open the UI, ask a question, and use the **Agent Trace** panel (Pipeline / Events tabs) to inspect the flow.
 
-## Tests
-```bash
-cd backend && pytest -q
-```
-- `tests/test_unit.py` — connectors + chunking, no LLM (fast, free).
-- `tests/test_pipeline_integration.py` — full agent pipeline over a fixture index; asserts an answer is
-  produced, citations point to **real ingested documents**, and incident questions surface a **resolution**
-  (groundedness check). The LLM test skips automatically if no key is set.
-
-## API
+## 🔗 API
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/status` | index + per-source counts, provider/model, sample queries |
+| GET | `/api/status` | index counts, provider/model, sample queries |
 | POST | `/api/ingest` | `{source: all\|confluence\|worddocs\|servicenow}` |
-| POST | `/api/chat` | `{message, sources?}` → answer, citations, stages, events, timings |
+| POST | `/api/chat` | grounded answer + citations + trace (non-streaming) |
+| POST | `/api/chat/stream` | same, streamed via Server-Sent Events |
 | GET | `/api/history/{session_id}` | stored conversation |
 
-## Roadmap (next phases)
-- **Phase 1 — Docker**: one Dockerfile per service + `docker-compose` (Qdrant official image).
-- **Phase 2 — Kubernetes**: Deployment/Service/ConfigMap/Secret, Qdrant StatefulSet+PVC, ingestion CronJob, HPA, scale-to-zero.
+## 🗺️ Roadmap
+- **Phase 1 (Docker)** and **Phase 2 (Kubernetes: Qdrant StatefulSet, ingestion CronJob, HPA)** deployment.
+- Implement the live Confluence/ServiceNow connector branches.
+- Answer feedback (👍/👎) for grounding quality.
+
+---
+_Tech: React + Tailwind · FastAPI · MongoDB · Qdrant (embedded) · google-adk · litellm · fastembed._

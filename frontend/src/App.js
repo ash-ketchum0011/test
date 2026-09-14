@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   Boxes, Send, PanelRightOpen, PanelRightClose, Database, Cpu,
-  ExternalLink, AlertTriangle, Wrench, RefreshCw, Loader2, BadgeCheck, Terminal, Zap, Square,
+  ExternalLink, AlertTriangle, Wrench, RefreshCw, Loader2, BadgeCheck, Terminal, Zap, Square, Sun, Moon,
 } from "lucide-react";
 import { getStatus, runIngest, streamChat } from "./api";
 import { SourceBadge, SOURCE_STYLE } from "./components/badges";
@@ -15,12 +15,19 @@ const FILTERS = [
   { key: "servicenow", label: "ServiceNow" },
 ];
 
+// Maps each streamed agent onto one of the 4 pipeline stages shown in the trace panel.
+const STAGE_ORDER = ["orchestrator", "retrieval", "rerank_validation", "response"];
+const AGENT_STAGE = {
+  orchestrator: "orchestrator", document_agent: "retrieval", incident_agent: "retrieval",
+  search_agent: "retrieval", rerank_validate: "rerank_validation", response_agent: "response",
+};
+
 function StatBadge({ icon: Icon, label, value }) {
   return (
     <div className="hidden items-center gap-2 rounded-lg border border-subtle bg-card px-3 py-1.5 md:flex">
       <Icon size={14} className="text-sky-400" />
-      <span className="text-[11px] text-slate-500">{label}</span>
-      <span className="font-mono text-xs font-semibold text-slate-200">{value}</span>
+      <span className="text-[11px] text-ink3">{label}</span>
+      <span className="font-mono text-xs font-semibold text-ink">{value}</span>
     </div>
   );
 }
@@ -29,7 +36,7 @@ function Citations({ items }) {
   if (!items?.length) return null;
   return (
     <div className="mt-3 border-t border-subtle pt-3">
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Citations</div>
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink3">Citations</div>
       <div className="space-y-1.5">
         {items.map((c) => (
           <a
@@ -41,9 +48,9 @@ function Citations({ items }) {
             data-testid="citation-link"
           >
             <span className="font-mono text-xs text-sky-400">[{c.index}]</span>
-            <span className="flex-1 truncate text-xs text-slate-300 group-hover:text-slate-100">{c.title}</span>
+            <span className="flex-1 truncate text-xs text-ink2 group-hover:text-ink">{c.title}</span>
             <SourceBadge type={c.source_type} />
-            <ExternalLink size={12} className="text-slate-600 group-hover:text-sky-400" />
+            <ExternalLink size={12} className="text-ink3 group-hover:text-sky-400" />
           </a>
         ))}
       </div>
@@ -73,11 +80,11 @@ function LiveSteps({ steps }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-testid="live-pipeline-steps">
       {steps.map((s, i) => (
-        <span key={i} className="fade-up inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-300">
+        <span key={i} className="fade-up inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-brand">
           <Zap size={9} /> {s.label}
         </span>
       ))}
-      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+      <span className="inline-flex items-center gap-1 text-[11px] text-ink3">
         <Loader2 size={11} className="animate-spin" /> working…
       </span>
     </div>
@@ -102,7 +109,7 @@ function AssistantMessage({ msg, onTrace, liveSteps }) {
           </div>
         )}
         {!showThinking && (
-          <div className="md text-[14px] text-slate-200">
+          <div className="md text-[14px] text-ink">
             <ReactMarkdown>{answerNoRes || "_No answer produced._"}</ReactMarkdown>
             {msg.streaming && <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-sky-400 align-middle" />}
           </div>
@@ -112,7 +119,7 @@ function AssistantMessage({ msg, onTrace, liveSteps }) {
         {msg.trace && !msg.streaming && (
           <button
             onClick={() => onTrace(msg.trace)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-subtle bg-obsidian/60 px-2.5 py-1 text-[11px] text-slate-400 hover:border-sky-500/40 hover:text-sky-300"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-subtle bg-obsidian/60 px-2.5 py-1 text-[11px] text-ink2 hover:border-sky-500/40 hover:text-brand"
             data-testid="view-trace-button"
           >
             <Terminal size={12} /> View agent trace · {msg.trace?.elapsed_ms}ms
@@ -134,12 +141,18 @@ export default function App() {
   const [activeTrace, setActiveTrace] = useState(null);
   const [ingesting, setIngesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState([]);
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const endRef = useRef(null);
   const abortRef = useRef(null);
+  const liveTraceRef = useRef(null);
 
   const refresh = () => getStatus().then(setStatus).catch(() => {});
   useEffect(() => { refresh(); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const patchLast = (patch) =>
     setMessages((m) => {
@@ -162,14 +175,32 @@ export default function App() {
     setLoading(true);
     const controller = new AbortController();
     abortRef.current = controller;
+    const live = { streaming: true, stageStatus: {}, events: [], tokens: 0 };
+    liveTraceRef.current = live;
+    setActiveTrace({ ...live });
+    setShowTrace(true);
     try {
       const sources = filter === "all" ? ["all"] : [filter];
       await streamChat(message, sources, undefined, (ev) => {
         if (ev.type === "step") {
           setLiveSteps((s) => (s.some((x) => x.agent === ev.agent) ? s : [...s, { agent: ev.agent, label: ev.label }]));
+          const stage = AGENT_STAGE[ev.agent];
+          const idx = STAGE_ORDER.indexOf(stage);
+          STAGE_ORDER.forEach((s, i) => { if (i < idx) live.stageStatus[s] = "done"; });
+          if (live.stageStatus[stage] !== "done") live.stageStatus[stage] = "running";
+          live.events = [...live.events, { type: "step", agent: ev.agent, label: ev.label, t_ms: ev.t_ms }];
+          setActiveTrace({ ...live });
+        } else if (ev.type === "tool") {
+          live.events = [...live.events, { type: "tool_call", agent: ev.agent, label: ev.label, tool: ev.tool, args: ev.args, t_ms: ev.t_ms }];
+          setActiveTrace({ ...live });
         } else if (ev.type === "token") {
+          ["orchestrator", "retrieval", "rerank_validation"].forEach((s) => (live.stageStatus[s] = "done"));
+          live.stageStatus.response = "streaming";
+          live.tokens += 1;
           patchLast((last) => ({ ...last, answer: (last.answer || "") + ev.text }));
+          if (live.tokens % 4 === 0) setActiveTrace({ ...live });
         } else if (ev.type === "done") {
+          liveTraceRef.current = null;
           setActiveTrace(ev);
           setShowTrace(true);
           patchLast((last) => ({
@@ -179,6 +210,8 @@ export default function App() {
         }
       }, controller.signal);
     } catch (e) {
+      liveTraceRef.current = null;
+      setActiveTrace((t) => (t && t.streaming ? { ...t, streaming: false, stopped: true } : t));
       if (e.name === "AbortError") {
         patchLast((last) => ({
           ...last, streaming: false, stopped: true,
@@ -204,7 +237,7 @@ export default function App() {
   const total = status?.total_points ?? "…";
 
   return (
-    <div className="flex h-screen flex-col bg-obsidian bg-grid text-slate-100">
+    <div className="flex h-screen flex-col bg-obsidian bg-grid text-ink">
       {/* Header */}
       <header className="sticky top-0 z-50 flex items-center gap-3 border-b border-subtle bg-obsidian/85 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
@@ -213,7 +246,7 @@ export default function App() {
           </span>
           <div>
             <h1 className="font-head text-base font-extrabold leading-none tracking-tight">RAG Command Center</h1>
-            <p className="text-[11px] text-slate-500">Multi-Agent · Google ADK · Qdrant Hybrid</p>
+            <p className="text-[11px] text-ink3">Multi-Agent · Google ADK · Qdrant Hybrid</p>
           </div>
         </div>
 
@@ -223,13 +256,21 @@ export default function App() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-subtle bg-card text-ink2 transition-colors hover:border-brand/50 hover:text-brand"
+            data-testid="theme-toggle-button"
+            title="Toggle theme"
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <nav className="flex rounded-lg border border-subtle bg-card p-0.5">
             {["chat", "ingestion"].map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize ${
-                  view === v ? "bg-sky-500/15 text-sky-300" : "text-slate-400 hover:text-slate-200"
+                  view === v ? "bg-sky-500/15 text-brand" : "text-ink2 hover:text-ink"
                 }`}
                 data-testid={`nav-${v}`}
               >
@@ -239,7 +280,7 @@ export default function App() {
           </nav>
           <button
             onClick={() => setShowTrace((s) => !s)}
-            className="flex items-center gap-1.5 rounded-lg border border-subtle bg-card px-2.5 py-1.5 text-xs text-slate-300 hover:border-sky-500/40"
+            className="flex items-center gap-1.5 rounded-lg border border-subtle bg-card px-2.5 py-1.5 text-xs text-ink2 hover:border-sky-500/40"
             data-testid="agent-trace-toggle-button"
           >
             {showTrace ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
@@ -255,15 +296,15 @@ export default function App() {
             <>
               {/* filters */}
               <div className="flex flex-wrap items-center gap-2 border-b border-subtle px-4 py-2.5">
-                <span className="text-[11px] uppercase tracking-wide text-slate-600">Scope</span>
+                <span className="text-[11px] uppercase tracking-wide text-ink3">Scope</span>
                 {FILTERS.map((f) => (
                   <button
                     key={f.key}
                     onClick={() => setFilter(f.key)}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       filter === f.key
-                        ? "border-sky-500/50 bg-sky-500/15 text-sky-300"
-                        : "border-subtle bg-card text-slate-400 hover:text-slate-200"
+                        ? "border-sky-500/50 bg-sky-500/15 text-brand"
+                        : "border-subtle bg-card text-ink2 hover:text-ink"
                     }`}
                     data-testid={`source-filter-${f.key}`}
                   >
@@ -276,8 +317,8 @@ export default function App() {
               <div className="scroll-thin flex-1 space-y-5 overflow-y-auto px-4 py-5 lg:px-8">
                 {messages.length === 0 && (
                   <div className="mx-auto max-w-2xl pt-6 text-center">
-                    <h2 className="font-head text-2xl font-bold tracking-tight text-slate-100">Ask your knowledge base</h2>
-                    <p className="mt-1.5 text-sm text-slate-500">
+                    <h2 className="font-head text-2xl font-bold tracking-tight text-ink">Ask your knowledge base</h2>
+                    <p className="mt-1.5 text-sm text-ink3">
                       Grounded answers with citations across Confluence, Word docs and ServiceNow — with a full agent trace.
                     </p>
                     <div className="mt-5 flex flex-col gap-2">
@@ -285,7 +326,7 @@ export default function App() {
                         <button
                           key={i}
                           onClick={() => submit(s)}
-                          className="rounded-xl border border-subtle bg-card px-4 py-2.5 text-left text-sm text-slate-300 transition-colors hover:border-sky-500/40 hover:bg-cardhover"
+                          className="rounded-xl border border-subtle bg-card px-4 py-2.5 text-left text-sm text-ink2 transition-colors hover:border-sky-500/40 hover:bg-cardhover"
                           data-testid={`sample-query-${i}`}
                         >
                           {s}
@@ -298,7 +339,7 @@ export default function App() {
                 {messages.map((m, i) =>
                   m.role === "user" ? (
                     <div key={i} className="fade-up flex justify-end" data-testid="user-message">
-                      <div className="max-w-[80%] rounded-2xl rounded-tr-sm border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm text-sky-50">
+                      <div className="max-w-[80%] rounded-2xl rounded-tr-sm border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm text-ink">
                         {m.content}
                       </div>
                     </div>
@@ -323,7 +364,7 @@ export default function App() {
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
                     rows={1}
                     placeholder="Ask about a policy, runbook, or past incident…"
-                    className="scroll-thin max-h-32 flex-1 resize-none rounded-xl border border-subtle bg-card px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-sky-500/50"
+                    className="scroll-thin max-h-32 flex-1 resize-none rounded-xl border border-subtle bg-card px-4 py-3 text-sm text-ink placeholder-ink3 outline-none focus:border-sky-500/50"
                     data-testid="chat-input-textarea"
                   />
                   {loading ? (
@@ -373,10 +414,10 @@ function IngestionView({ status, onIngest, ingesting, onRefresh }) {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="font-head text-2xl font-bold tracking-tight">Ingestion Dashboard</h2>
-            <p className="text-sm text-slate-500">Unified pipeline · idempotent connectors · Qdrant hybrid index</p>
+            <p className="text-sm text-ink3">Unified pipeline · idempotent connectors · Qdrant hybrid index</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-subtle bg-card px-3 py-2 text-sm text-slate-300 hover:border-sky-500/40" data-testid="refresh-status-button">
+            <button onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-subtle bg-card px-3 py-2 text-sm text-ink2 hover:border-sky-500/40" data-testid="refresh-status-button">
               <RefreshCw size={15} /> Refresh
             </button>
             <button onClick={onIngest} disabled={ingesting} className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-obsidian hover:bg-sky-400 disabled:opacity-50" data-testid="run-ingest-button">
@@ -393,8 +434,8 @@ function IngestionView({ status, onIngest, ingesting, onRefresh }) {
             { label: "Model", value: status?.model ?? "…" },
           ].map((s) => (
             <div key={s.label} className="rounded-xl border border-subtle bg-card p-4">
-              <div className="text-[11px] uppercase tracking-wide text-slate-500">{s.label}</div>
-              <div className="mt-1 font-mono text-xl font-bold text-slate-100">{s.value}</div>
+              <div className="text-[11px] uppercase tracking-wide text-ink3">{s.label}</div>
+              <div className="mt-1 font-mono text-xl font-bold text-ink">{s.value}</div>
             </div>
           ))}
         </div>
@@ -406,18 +447,18 @@ function IngestionView({ status, onIngest, ingesting, onRefresh }) {
                 <SourceBadge type={key} />
                 <span className="live-dot h-2 w-2 rounded-full bg-emerald-400" />
               </div>
-              <div className="font-head text-lg font-semibold text-slate-100">{s.label}</div>
+              <div className="font-head text-lg font-semibold text-ink">{s.label}</div>
               <div className="mt-3 flex items-end gap-4">
                 <div>
                   <div className="font-mono text-2xl font-bold text-sky-400">{s.documents}</div>
-                  <div className="text-[11px] text-slate-500">documents</div>
+                  <div className="text-[11px] text-ink3">documents</div>
                 </div>
                 <div>
-                  <div className="font-mono text-2xl font-bold text-slate-200">{s.chunks}</div>
-                  <div className="text-[11px] text-slate-500">chunks</div>
+                  <div className="font-mono text-2xl font-bold text-ink">{s.chunks}</div>
+                  <div className="text-[11px] text-ink3">chunks</div>
                 </div>
               </div>
-              <div className="mt-3 truncate text-[11px] text-slate-600">
+              <div className="mt-3 truncate text-[11px] text-ink3">
                 last: {s.last_indexed ? new Date(s.last_indexed).toLocaleString() : "—"}
               </div>
             </div>
